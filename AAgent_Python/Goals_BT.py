@@ -234,55 +234,64 @@ class Avoid:
     The Drone advances while avoiding obstacles, ensuring it does not collide with objects,
     including exterior walls.
     """
-    MOVING = 0
-    AVOIDING = 1
+    #set values for possible states.
+    MOVING = 0 #state for when the drone is moving.
+    AVOIDING = 1 #state for when the drone is avoiding.
     
     def __init__(self, a_agent):
+        #initialize the avoid class regarding the agent and necessary varaibles.
         self.a_agent = a_agent
         self.rc_sensor = a_agent.rc_sensor
         self.i_state = a_agent.i_state
-        self.state = self.MOVING
-        self.avoid_direction = ""
+        self.state = self.MOVING #set state as moving.
+        self.avoid_direction = "" #to store direction in which the drone will turn.
         self.avoid_start_rotation = 0
-        self.safe_distance = 1.0  # Safe distance to obstacles
+        self.safe_distance = 1.0  #variable for the safe distance to obstacles. 
     
     async def run(self):
+        #to run the avoid behaviour.
         try:
-            # Start moving forward
-            await self.a_agent.send_message("action", "mf")
-            self.state = self.MOVING
+            #start moving forward
+            await self.a_agent.send_message("action", "mf") #give command to move forward.
+            self.state = self.MOVING #set status to MOVING.
             
             while True:
-                # Get sensor data
+                #get the data from the sensors. HIT, DISTANCES and ANGLES.
                 sensor_hits = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.HIT]
                 sensor_distances = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.DISTANCE]
                 sensor_angles = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
                 
                 if self.state == self.MOVING:
-                    # Check for obstacles within safe distance
-                    obstacle_detected = False
-                    center_ray_index = len(sensor_hits) // 2
+                    #if the drone is in moving state
+                    obstacle_detected = False #set obstacle detection as false
+                    center_ray_index = len(sensor_hits) // 2 #get the index for the center ray
                     
-                    # Create a list of tuples (angle, distance) for rays that detected obstacles
+                    #create a list of tuples (where every item is (angle, distance)) for rays that have detected an obstacle.
                     obstacle_info = []
                     for i, hit in enumerate(sensor_hits):
+                        #check if hits are true for each ray and whether the distances are smaller than the safe_distance.(They have to be larger than 0)
                         if hit and sensor_distances[i] < self.safe_distance and sensor_distances[i] > 0:
-                            obstacle_info.append((sensor_angles[i], sensor_distances[i]))
-                            obstacle_detected = True
+                            obstacle_info.append((sensor_angles[i], sensor_distances[i])) #store infromation for detected obstacle.
+                            obstacle_detected = True #set the obstacle detected variable as True.
                     
                     if obstacle_detected:
-                        # Stop moving forward
+                        #if obstacle_detected variable is true and requirements are met
+                        #send a message for the drone to stop moving.
                         await self.a_agent.send_message("action", "stop")
                         
-                        # Determine which direction to turn based on obstacle positions
-                        left_obstacles = [info for info in obstacle_info if info[0] < 0]
-                        right_obstacles = [info for info in obstacle_info if info[0] > 0]
+                        #based on obstacle's positions, determine which position to go to.
+                        #firstly, get information on obstacles for both positions.
+                        left_obstacles = [info for info in obstacle_info if info[0] < 0] #for obstacles on the left
+                        right_obstacles = [info for info in obstacle_info if info[0] > 0] #for obstacles on the right.
                         
-                        # Calculate average distances on each side
+                        #compute the average distance on both sides based on obstacles found before for both sides.
                         left_avg_dist = sum([info[1] for info in left_obstacles]) / len(left_obstacles) if left_obstacles else float('inf')
                         right_avg_dist = sum([info[1] for info in right_obstacles]) / len(right_obstacles) if right_obstacles else float('inf')
                         
-                        # Decide which way to turn
+                        #make a decision on which way to go based on informatio gathered before.
+                        #check if diatnces is grater on the right or left side.
+                        #for the side where we have more distance, set that direction and the avoid_direction variable.
+                        #then send the message with said direction to take the action and print out the message indicating it is occuring correctly.
                         if left_avg_dist > right_avg_dist:
                             self.avoid_direction = "left"
                             await self.a_agent.send_message("action", "tl")
@@ -292,43 +301,46 @@ class Avoid:
                             await self.a_agent.send_message("action", "tr")
                             print("Obstacle detected! Turning right")
                         
-                        self.avoid_start_rotation = self.i_state.rotation["y"]
-                        self.state = self.AVOIDING
+                        self.avoid_start_rotation = self.i_state.rotation["y"] #get initial rotation before drone starts moving.
+                        self.state = self.AVOIDING #change state status tu avoiding.
                 
                 elif self.state == self.AVOIDING:
-                    # Check if we've turned enough to avoid obstacle
-                    current_rotation = self.i_state.rotation["y"]
-                    rotation_diff = abs(current_rotation - self.avoid_start_rotation)
+                    #if the drone is in avoiding state.
+                    #first check if the turn is enogh to avoid obstacle
+                    current_rotation = self.i_state.rotation["y"] #get the current rotation.
+                    rotation_diff = abs(current_rotation - self.avoid_start_rotation) #compute difference regarding the initial rotation.
                     
-                    # Handle wraparound from 0 to 360
+                    #handle wraparound from 0 to 360.
                     if rotation_diff > 180:
                         rotation_diff = 360 - rotation_diff
                     
-                    # We want to turn at least 45 degrees
+                    # ensure turn is at least 45 degrees.
                     if rotation_diff >= 45:
-                        # Stop turning
+                        #stop rotating and send message to drone to execute action.
                         await self.a_agent.send_message("action", "nt")
                         
-                        # Check if path is clear now
-                        front_rays_clear = True
-                        center_ray_index = len(sensor_hits) // 2
-                        check_range = 1  # Check center ray and one ray on each side
+                        #check whether path is clear now.
+                        front_rays_clear = True #variable to check if path is clear.
+                        center_ray_index = len(sensor_hits) // 2 #set index for center ray.
+                        check_range = 1  #set range to check center and one on each side.
                         
                         for i in range(center_ray_index - check_range, center_ray_index + check_range + 1):
                             if 0 <= i < len(sensor_hits):
+                                #check if obstacle is still present, if so, do not move forward.
                                 if sensor_hits[i] and sensor_distances[i] < self.safe_distance:
                                     front_rays_clear = False
                                     break
                         
                         if front_rays_clear:
-                            # Resume moving forward
-                            await self.a_agent.send_message("action", "mf")
-                            self.state = self.MOVING
+                            #moving forward is safe.
+                            await self.a_agent.send_message("action", "mf") #send message with the move forward function.
+                            self.state = self.MOVING #set status to MOVING.
                 
-                await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
+                await asyncio.sleep(0.1)  #small delay to prevent busy waiting
                 
         except asyncio.CancelledError:
-            print("***** TASK Avoid CANCELLED")
-            await self.a_agent.send_message("action", "stop")
-            await self.a_agent.send_message("action", "nt")
-            self.state = self.MOVING
+            #to handle task cancellation.
+            print("***** TASK Avoid CANCELLED") #print out cancelled message.
+            await self.a_agent.send_message("action", "stop") #stop moving.
+            await self.a_agent.send_message("action", "nt") #stop turning
+            self.state = self.MOVING #set status to MOVING.
