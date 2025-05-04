@@ -43,6 +43,7 @@ def start_agents(config_file):
 
 
 if __name__ == "__main__":
+    
     if len(sys.argv) < 1:
         print("Usage: python Spawner.py <init_file.json>")
     else:
