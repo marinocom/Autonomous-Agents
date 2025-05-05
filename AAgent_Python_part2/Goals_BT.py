@@ -254,6 +254,7 @@ class Avoid:
             self.state = self.MOVING
             
             while True:
+                print("RETURNING TO AVOID")
                 await self.a_agent.send_message("action", "mf")
                 # Get sensor data
                 sensor_hits = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.HIT]
@@ -262,6 +263,7 @@ class Avoid:
                 
                 
                 if self.state == self.MOVING:
+                    print("enter moving state")
                     # Check for obstacles within safe distance
 
                     obstacle_detected = False
@@ -278,6 +280,7 @@ class Avoid:
                     
                     if obstacle_detected:
                         # Stop moving forward
+                        print ("obstacle detected")
                         
                         await self.a_agent.send_message("action", "stop")
                         
@@ -292,52 +295,52 @@ class Avoid:
                         # Decide which way to turn
                         if left_avg_dist > right_avg_dist:
                             self.avoid_direction = "left"
-                            await self.a_agent.send_message("action", "tl")
                             print("Obstacle detected! Turning left")
                         else:
                             self.avoid_direction = "right"
-                            await self.a_agent.send_message("action", "tr")
                             print("Obstacle detected! Turning right")
                         
                         self.avoid_start_rotation = self.i_state.rotation["y"]
                         self.state = self.AVOIDING
                 
                 elif self.state == self.AVOIDING:
-                    # Check if we've turned enough to avoid obstacle
+                    # Continue turning until at least 45° rotation is achieved
                     current_rotation = self.i_state.rotation["y"]
                     rotation_diff = abs(current_rotation - self.avoid_start_rotation)
                     
-                    # Handle wraparound from 0 to 360
+                    # Handle wraparound
                     if rotation_diff > 180:
                         rotation_diff = 360 - rotation_diff
-                    
-                    # We want to turn at least 45 degrees
-                    if rotation_diff >= 45:
+
+                    if rotation_diff < 45:
+                        # Keep turning in the same direction
+                        await self.a_agent.send_message("action", "tl" if self.avoid_direction == "left" else "tr")
+                    else:
                         # Stop turning
                         await self.a_agent.send_message("action", "nt")
-                        
-                        # Check if path is clear now
+
+                        # Recheck sensor data
+                        sensor_hits = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.HIT]
+                        sensor_distances = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.DISTANCE]
+
                         front_rays_clear = True
                         center_ray_index = len(sensor_hits) // 2
-                        check_range = 1  # Check center ray and one ray on each side
-                        
+                        check_range = 1
                         for i in range(center_ray_index - check_range, center_ray_index + check_range + 1):
                             if 0 <= i < len(sensor_hits):
                                 if sensor_hits[i] and sensor_distances[i] < self.safe_distance:
                                     front_rays_clear = False
                                     break
-                                    
+
                         if front_rays_clear:
-                            print ("CLEARED")
-                            # Resume moving forward and complete the behavior
-                            await self.a_agent.send_message("action", "mf")
-                            await asyncio.sleep(0.1)  # Small delay to start moving
+                            print("CLEARED")
+                            await self.a_agent.send_message("action", "tl"
+                            await asyncio.sleep(0.1)
                             return True
                         else:
-                            # If still blocked, continue turning
+                            # Restart avoidance turn with updated rotation base
                             self.avoid_start_rotation = current_rotation
 
-                await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
                 
         except asyncio.CancelledError:
             print("***** TASK Avoid CANCELLED")
