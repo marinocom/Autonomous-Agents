@@ -334,7 +334,7 @@ class Avoid:
 
                         if front_rays_clear:
                             print("CLEARED")
-                            await self.a_agent.send_message("action", "tl"
+                            await self.a_agent.send_message("action", "tl")
                             await asyncio.sleep(0.1)
                             return True
                         else:
