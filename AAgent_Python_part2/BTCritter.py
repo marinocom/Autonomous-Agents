@@ -97,7 +97,7 @@ class BN_Avoid(pt.behaviour.Behaviour):
         #Set the goal to None
         self.my_goal = None
         #Print a message to the terminal
-        print("Initializing BN_Avoid")
+        #print("Initializing BN_Avoid")
         #Call the parent constructor
         super(BN_Avoid, self).__init__("BN_Avoid")
         #get the agent
@@ -122,12 +122,12 @@ class BN_Avoid(pt.behaviour.Behaviour):
         else:
             #Check if the goal was successful
             if self.my_goal.result():
-                print("BN_Avoid completed with SUCCESS")
+                #print("BN_Avoid completed with SUCCESS")
                 #Return success
                 return pt.common.Status.SUCCESS
             #If the goal was not successful
             else:
-                print("BN_Avoid completed with FAILURE")
+                #print("BN_Avoid completed with FAILURE")
                 #Return failure
                 return pt.common.Status.FAILURE
 

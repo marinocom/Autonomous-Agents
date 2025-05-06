@@ -154,7 +154,7 @@ class RandomRoam:
     async def run(self):
         try:
 
-            print('__________________________RETURNING TO RANDOM ROAM')
+            #print('__________________RETURNING TO RANDOM ROAM___________________')
 
             while True:
                 current_time = asyncio.get_event_loop().time()
@@ -169,7 +169,7 @@ class RandomRoam:
                         # Move for 2-5 seconds
                         self.movement_time = random.uniform(2.0, 5.0)
                         self.movement_start = current_time
-                        print(f"Moving forward for {self.movement_time:.1f} seconds")
+                        #print(f"Moving forward for {self.movement_time:.1f} seconds")
                         await self.a_agent.send_message("action", "mf")
                         
                     else:  # 30% chance to turn
@@ -186,26 +186,9 @@ class RandomRoam:
                             self.turn_command = "tr"
                             self.turn_target = (self.i_state.rotation["y"] + turn_degrees) % 360
                         
-                        print(f"Turning {turn_degrees} degrees {self.turn_direction}")
+                        #print(f"Turning {turn_degrees} degrees {self.turn_direction}")
                         await self.a_agent.send_message("action", self.turn_command)
                         
-                    '''
-                    elif self.state == self.MOVING:
-                        # Check if obstacle detected within a safe distance (0.5 units)
-                        sensor_hits = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.HIT]
-                        sensor_distances = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.DISTANCE]
-                        
-                        obstacle_detected = False
-                        for i, hit in enumerate(sensor_hits):
-                            if hit and sensor_distances[i] < 1.00:
-                                obstacle_detected = True
-                                break
-                        
-                        # If obstacle detected or movement time elapsed, stop and decide next action
-                        if obstacle_detected or (current_time - self.movement_start) >= self.movement_time:
-                            await self.a_agent.send_message("action", "stop")
-                            self.state = self.DECIDING
-                    '''
                 elif self.state == self.MOVING:
                         # If movement time elapsed, stop and decide next action
                         if (current_time - self.movement_start) >= self.movement_time:
@@ -224,7 +207,7 @@ class RandomRoam:
                 await asyncio.sleep(0.1)
                 
         except asyncio.CancelledError:
-            print("***** TASK RandomRoam CANCELLED")
+            #print("***** TASK RandomRoam CANCELLED")
             await self.a_agent.send_message("action", "stop")
             await self.a_agent.send_message("action", "nt")
             self.state = self.DECIDING
@@ -233,8 +216,7 @@ class RandomRoam:
 
 class Avoid:
     """
-    The Drone advances while avoiding obstacles, ensuring it does not collide with objects,
-    including exterior walls.
+    Improved avoidance while keeping original structure
     """
     MOVING = 0
     AVOIDING = 1
@@ -246,107 +228,91 @@ class Avoid:
         self.state = self.MOVING
         self.avoid_direction = ""
         self.avoid_start_rotation = 0
-        self.safe_distance = 1.0  # Safe distance to obstacles
-    
+        self.safe_distance = 1.0
+        self.last_command_time = 0  # NEW: Track command timing
+
     async def run(self):
         try:
-            # Start moving forward
-            self.state = self.MOVING
-            
+
+            #print('__________________AVOID___________________')
+
             while True:
-                print("RETURNING TO AVOID")
-                await self.a_agent.send_message("action", "mf")
-                # Get sensor data
+                current_time = asyncio.get_event_loop().time()
+                
+                # Only proceed if enough time has passed since last command (NEW)
+                if current_time - self.last_command_time < 0.1:  # Send commands every 0.1s
+                    await asyncio.sleep(0.01)
+                    continue
+                    
+                self.last_command_time = current_time
+                
+                # Get sensor data (unchanged from original)
                 sensor_hits = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.HIT]
                 sensor_distances = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.DISTANCE]
                 sensor_angles = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
                 
-                
                 if self.state == self.MOVING:
-                    print("enter moving state")
-                    # Check for obstacles within safe distance
-
-                    obstacle_detected = False
-                    center_ray_index = len(sensor_hits) // 2
+                    await self.a_agent.send_message("action", "mf")  # Continuous movement
                     
-                    # Create a list of tuples (angle, distance) for rays that detected obstacles
+                    # Improved obstacle detection (similar structure but more reliable)
                     obstacle_info = []
-                    for i, hit in enumerate(sensor_hits):
-                        
-                        if hit and sensor_distances[i] < self.safe_distance and sensor_distances[i] > 0:
-                        
-                            obstacle_info.append((sensor_angles[i], sensor_distances[i]))
-                            obstacle_detected = True
+                    for i, (hit, dist) in enumerate(zip(sensor_hits, sensor_distances)):
+                        if hit and 0.1 < dist < self.safe_distance:  # Added minimum distance
+                            obstacle_info.append((sensor_angles[i], dist))
                     
-                    if obstacle_detected:
-                        # Stop moving forward
-                        print ("obstacle detected")
-                        
+                    if obstacle_info:  # If any obstacles found
                         await self.a_agent.send_message("action", "stop")
                         
-                        # Determine which direction to turn based on obstacle positions
+                        # Original turn decision logic (preserved)
                         left_obstacles = [info for info in obstacle_info if info[0] < 0]
                         right_obstacles = [info for info in obstacle_info if info[0] > 0]
                         
-                        # Calculate average distances on each side
-                        left_avg_dist = sum([info[1] for info in left_obstacles]) / len(left_obstacles) if left_obstacles else float('inf')
-                        right_avg_dist = sum([info[1] for info in right_obstacles]) / len(right_obstacles) if right_obstacles else float('inf')
+                        left_avg_dist = sum(d for _,d in left_obstacles)/len(left_obstacles) if left_obstacles else float('inf')
+                        right_avg_dist = sum(d for _,d in right_obstacles)/len(right_obstacles) if right_obstacles else float('inf')
                         
-                        # Decide which way to turn
                         if left_avg_dist > right_avg_dist:
                             self.avoid_direction = "left"
-                            print("Obstacle detected! Turning left")
+                            #print("Obstacle detected! Turning left")
                         else:
                             self.avoid_direction = "right"
-                            print("Obstacle detected! Turning right")
-                        
+                            #print("Obstacle detected! Turning right")
+                            
+                        #print(f"Turning {self.avoid_direction} (left avg: {left_avg_dist:.2f}, right avg: {right_avg_dist:.2f})")
                         self.avoid_start_rotation = self.i_state.rotation["y"]
                         self.state = self.AVOIDING
                 
                 elif self.state == self.AVOIDING:
-                    # Continue turning until at least 45° rotation is achieved
-                    current_rotation = self.i_state.rotation["y"]
-                    rotation_diff = abs(current_rotation - self.avoid_start_rotation)
+                    # Continuous turning command (NEW)
+                    await self.a_agent.send_message("action", "tl" if self.avoid_direction == "left" else "tr")
                     
-                    # Handle wraparound
-                    if rotation_diff > 180:
-                        rotation_diff = 360 - rotation_diff
-
-                    if rotation_diff < 45:
-                        # Keep turning in the same direction
-                        await self.a_agent.send_message("action", "tl" if self.avoid_direction == "left" else "tr")
-                    else:
-                        # Stop turning
+                    # Original rotation check (unchanged)
+                    current_rot = self.i_state.rotation["y"]
+                    rot_diff = abs(current_rot - self.avoid_start_rotation)
+                    rot_diff = min(rot_diff, 360 - rot_diff)
+                    
+                    if rot_diff >= 45:  # Minimum turn achieved
                         await self.a_agent.send_message("action", "nt")
-
-                        # Recheck sensor data
-                        sensor_hits = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.HIT]
-                        sensor_distances = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.DISTANCE]
-
-                        front_rays_clear = True
-                        center_ray_index = len(sensor_hits) // 2
-                        check_range = 1
-                        for i in range(center_ray_index - check_range, center_ray_index + check_range + 1):
-                            if 0 <= i < len(sensor_hits):
-                                if sensor_hits[i] and sensor_distances[i] < self.safe_distance:
-                                    front_rays_clear = False
-                                    break
-
-                        if front_rays_clear:
-                            print("CLEARED")
-                            await self.a_agent.send_message("action", "tl")
-                            await asyncio.sleep(0.1)
+                        
+                        # Original clearance check (unchanged)
+                        front_clear = not any(
+                            hit and dist < self.safe_distance
+                            for i, (hit, dist) in enumerate(zip(sensor_hits, sensor_distances))
+                            if abs(sensor_angles[i]) < 45  # Front cone only
+                        )
+                        
+                        if front_clear:
+                            #print("Avoidance complete")
                             return True
                         else:
-                            # Restart avoidance turn with updated rotation base
-                            self.avoid_start_rotation = current_rotation
-
+                            # Continue avoiding from new angle
+                            self.avoid_start_rotation = current_rot
+                
+                await asyncio.sleep(0.01)  # Small delay
                 
         except asyncio.CancelledError:
-            print("***** TASK Avoid CANCELLED")
-            await self.a_agent.send_message("action", "stop")
             await self.a_agent.send_message("action", "nt")
-            self.state = self.MOVING
+            await self.a_agent.send_message("action", "stop")
+            raise
 
 
 
