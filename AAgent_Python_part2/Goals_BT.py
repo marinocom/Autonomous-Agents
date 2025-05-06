@@ -28,7 +28,7 @@ class DoNothing:
 
 class ForwardDist:
     """
-        Moves forward till it finds an obstacle. Then stops.
+    Moves forward till it finds an obstacle, then stops.
     """
     STOPPED = 0
     MOVING = 1
@@ -155,8 +155,6 @@ class RandomRoam:
     async def run(self):
         try:
 
-            #print('__________________RETURNING TO RANDOM ROAM___________________')
-
             while True:
                 current_time = asyncio.get_event_loop().time()
                 
@@ -217,7 +215,7 @@ class RandomRoam:
 
 class Avoid:
     """
-    Improved avoidance while keeping original structure
+    The agent moves forward and, upon detecting nearby obstacles, determines a safe direction and rotates to avoid collisions.
     """
     MOVING = 0
     AVOIDING = 1
@@ -230,14 +228,12 @@ class Avoid:
         self.avoid_direction = ""
         self.avoid_start_rotation = 0
         self.safe_distance = 1.0
-        self.last_command_time = 0  # Track command timing
+        self.last_command_time = 0  #Record the time of the last command sent to control action frequenc
 
     async def run(self):
         try:
-
-            #print('__________________AVOID___________________')
-
             while True:
+                # Check elapsed time to throttle command rate (avoid spamming Unity)
                 current_time = asyncio.get_event_loop().time()
                 
                 # Only proceed if enough time has passed since last command (avoids conflicts with unity)
@@ -247,51 +243,51 @@ class Avoid:
                     
                 self.last_command_time = current_time
                 
-                # Get sensor data
+                #Retrieve sensor data: obstacle hits, distances, and angles
                 sensor_hits = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.HIT]
                 sensor_distances = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.DISTANCE]
                 sensor_angles = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
                 
                 if self.state == self.MOVING:
-                    await self.a_agent.send_message("action", "mf")  # Continuous movement
-                    
-                    # Improved obstacle detection
+                    await self.a_agent.send_message("action", "mf")
+
                     obstacle_info = []
                     for i, (hit, dist) in enumerate(zip(sensor_hits, sensor_distances)):
                         if hit and 0.1 < dist < self.safe_distance:
                             obstacle_info.append((sensor_angles[i], dist))
                     
-                    if obstacle_info:  # If any obstacles found
+                    #If obstacles are detected, prepare for avoidance
+                    if obstacle_info:
                         await self.a_agent.send_message("action", "stop")
                         
-                        # turn decision logic
+                        #Categorize obstacles to left and right based on angle
                         left_obstacles = [info for info in obstacle_info if info[0] < 0]
                         right_obstacles = [info for info in obstacle_info if info[0] > 0]
                         
+                        #Compute average distance to obstacles on each side
                         left_avg_dist = sum(d for _,d in left_obstacles)/len(left_obstacles) if left_obstacles else float('inf')
                         right_avg_dist = sum(d for _,d in right_obstacles)/len(right_obstacles) if right_obstacles else float('inf')
                         
+                        # Choose avoidance direction based on which side has more clearance
                         if left_avg_dist > right_avg_dist:
                             self.avoid_direction = "left"
-                            #print("Obstacle detected! Turning left")
                         else:
                             self.avoid_direction = "right"
-                            #print("Obstacle detected! Turning right")
                             
-                        #print(f"Turning {self.avoid_direction} (left avg: {left_avg_dist:.2f}, right avg: {right_avg_dist:.2f})")
                         self.avoid_start_rotation = self.i_state.rotation["y"]
                         self.state = self.AVOIDING
                 
                 elif self.state == self.AVOIDING:
-                    # Continuous turning command
+
+                    #Send continuous turn command in the chosen avoidance direction
                     await self.a_agent.send_message("action", "tl" if self.avoid_direction == "left" else "tr")
                     
-                    # rotation check
+                    #Rotation check
                     current_rot = self.i_state.rotation["y"]
                     rot_diff = abs(current_rot - self.avoid_start_rotation)
                     rot_diff = min(rot_diff, 360 - rot_diff)
                     
-                    if rot_diff >= 45:  # Minimum turn achieved
+                    if rot_diff >= 45:
                         await self.a_agent.send_message("action", "nt")
                         
                         # clearance check
@@ -302,144 +298,98 @@ class Avoid:
                         )
                         
                         if front_clear:
-                            #print("Avoidance complete")
                             return True
                         else:
-                            # Continue avoiding from new angle
+                            #Continue avoiding from new angle
                             self.avoid_start_rotation = current_rot
                 
                 await asyncio.sleep(0.01)  # Small delay
-                
+
+        #------------------------------------------------------------------       
         except asyncio.CancelledError:
             await self.a_agent.send_message("action", "nt")
             await self.a_agent.send_message("action", "stop")
             raise
+        #------------------------------------------------------------------
 
 
 class FollowAstronaut:
     '''
-    Description: Class that represents the action of following an astronaut
+    Represents an agent following an astronaut using sensor data to navigate.
     '''
 
-    # Class constants
-    MOVING = 0 # Moving state
-    TURNING = 1 # Turning state
-    RIGHT = 1 # Turn right
-    LEFT = -1 # Turn left
+    MOVING = 0 
+    TURNING = 1 
+    RIGHT = 1 
+    LEFT = -1 
 
     def __init__(self, a_agent):
-        '''
-        init method for FollowAstronaut class
-        Input: a_agent: Agent object, the agent that will execute the action (in this case, follow an astronaut)
-        '''
-        # get the agent object
         self.a_agent = a_agent
-        # get the agent's sensors
-        self.rc_sensor = a_agent.rc_sensor
-        # get the agent's internal state
         self.i_state = a_agent.i_state
-        # set the rotation amount (by default None)
+        self.rc_sensor = a_agent.rc_sensor
         self.rotation_amount = None
-        # set the previous rotation
-        self.prev_rotation = 0
-        # set the accumulated rotation
         self.accumulated_rotation = 0
-        # set the direction to turn (by default right)
+        self.prev_rotation = 0
         self.direction = self.RIGHT
-        # set the state of the agent to MOVING
         self.state = self.MOVING
         
     async def run(self):
         '''
-        Use asyncio to run the action of following an astronaut
-        Output: True, when the action is done, in this case, after the agent has followed the astronaut
+        Uses asyncio to execute the action of following an astronaut
         '''
-        # try to run the action
         try:
    
-            while True:
-                # if the agent is in the MOVING state
+            while True: 
+                # Check if the agent is in the MOVING state
                 if self.state == self.MOVING:
-                    # Check if any of the rays hits an astronaut, using the detection sensor that we get from the BTCritter.py's detect_astronaut class
+                    # Check if any ray hits an astronaut using the detection sensor
                     if self.rc_sensor.sensor_rays[Sensors.RayCastSensor.HIT][self.a_agent.det_sensor]:
-                        # if the sensor that detects the astronaut is on the left side of the agent (0-4)
-                        if self.a_agent.det_sensor < 5:
-                            # Turn left by the angle given by the sensor that detects the astronaut,
-                            # if the sensor is 0, turn left by -90 degrees, if it is 4, turn left by -18 degrees
-                            turn_angle = -90 + self.a_agent.det_sensor * (90 / 5)
-                            # Send the message "tl" to the agent (turn left)
-                            await self.a_agent.send_message("action", f"tl")
-                        # if the sensor that detects the astronaut is on the right side of the agent (6-10)
-                        elif  self.a_agent.det_sensor >5:
-                            # Turn right by the angle given by the sensor that detects the astronaut,
-                            # if the sensor is 6, turn right by 18 degrees, if it is 10, turn right by 90 degrees
-                            turn_angle = self.a_agent.det_sensor * (90 / 5)
-                            # Send the message "tr" to the agent (turn right)
-                            await self.a_agent.send_message("action", f"tr")
-                        # if the sensor that detects the astronaut is in the middle of the agent (5), just move forward, no need to turn
+                        # Determine the turn angle based on the detected astronaut position
+                        if(self.a_agent.det_sensor<5):
+                            #The angle that the critter turns depends on the angle of the ray that detects the astronaut
+                            #-----------------------------------------------------------------------
+                            turning_angle = -90 + self.a_agent.det_sensor * (90 / 5)
+                            #-----------------------------------------------------------------------
+                            await self.a_agent.send_message("action", "tl") #Turn left
+
+                        elif(self.a_agent.det_sensor>5):
+                            turning_angle = self.a_agent.det_sensor * (90 / 5)
+                            await self.a_agent.send_message("action", "tr") #Turn right
+                        
                         else:
-                            #set the turn angle to 0 because, if not, we'd get an error of referencing before assignment
-                            turn_angle = 0
-                            # Send the message "mf" to the agent (move forward)
-                            await self.a_agent.send_message("action", f"mf")
-                        #set a sleep time to wait for the agent to turn  or move forward
-                        await asyncio.sleep(0.15)
-                        #go forward another time (this was added empirically to make the agent follow the astronaut better)
+                            turning_angle = 0 #Used to avoid errors
+                            await self.a_agent.send_message("action", "mf") # Move forward
+
+                        await asyncio.sleep(0.15) # Small delay to prevent busy waiting
                         await self.a_agent.send_message("action", "mf")
 
-                    """
-                    # If the agent is not in front of an astronaut, but is inside this action, means that the agent recently saw the astronaut
-                    #so we go in the direction that we followed the astronaut last time, this is part of the bonus task.
-                    else:
-                        # Send the message "mf" to the agent (move forward) a couple of times
-                        await self.a_agent.send_message("action", "mf")
-                        await self.a_agent.send_message("action", "mf")
-                    """
-
-                    #set previous rotation of the agent to the current rotation 
                     self.prev_rotation = self.i_state.rotation["y"]
-                    #set the accumulated rotation to 0
                     self.accumulated_rotation = 0
-                    #set the state to TURNING
                     self.state = self.TURNING
-                # if the agent is in the TURNING state
+
+                #If the agent is in the TURNING state
                 elif self.state == self.TURNING:
-                    # Get the current rotation of the agent in the y-axis
                     current_rotation = self.i_state.rotation["y"]
-                    # If the direction is right
+
                     if self.direction == self.RIGHT:
-                        # Calculate the rotation change by subtracting the previous rotation from the current rotation and adding 360 to avoid
-                        # negative values, then take the modulo 360 so we get the correct value and never does more than an entire rotation (360 degrees)
-                        rotation_change = (current_rotation - self.prev_rotation + 360) % 360
-                        # Update the accumulated rotation by adding the rotation change
-                        self.accumulated_rotation += rotation_change
-                    # If the direction is left
+                        new_rotation = (current_rotation - self.prev_rotation + 360) % 360 #This avoids negative values
+                        self.accumulated_rotation += new_rotation
+
                     elif self.direction == self.LEFT:
-                        # Calculate the rotation change by subtracting the current rotation from the previous rotation and adding 360 to avoid
-                        # negative values, then take the modulo 360 so we get the correct value and never does more than an entire rotation (360 degrees)
-                        rotation_change = (self.prev_rotation - current_rotation + 360) % 360
-                        # Update the accumulated rotation by adding the rotation change
-                        self.accumulated_rotation += rotation_change
-                    # Set the previous rotation to the current rotation
+                        new_rotation = (self.prev_rotation - current_rotation + 360) % 360
+                        self.accumulated_rotation += new_rotation
+
                     self.prev_rotation = current_rotation
-                    # If the accumulated rotation is greater than or equal to the rotation amount
-                    if self.accumulated_rotation >= abs(turn_angle):
-                        # Send the message "nt" to the agent (no turn) as the turn is done
-                        await self.a_agent.send_message("action", "nt")
-                        # Reset the accumulated rotation to 0
-                        self.accumulated_rotation = 0
-                        # Set the direction to right (default)
-                        self.direction = self.RIGHT
-                        # Set the state to MOVING
-                        self.state = self.MOVING
-                        # Return True when the action is done
+
+                    if self.accumulated_rotation >= abs(turning_angle):
+                        await self.a_agent.send_message("action", "nt") #Send "nt" for no turn
+                        self.accumulated_rotation = 0 #Reset accumulated rotation
+                        self.direction = self.RIGHT #Reset direction to default (right)
+                        self.state = self.MOVING #Set state back to MOVING
                         return True
-                    # Sleep for 0 seconds and keep running the action
+                    
                     await asyncio.sleep(0)
 
-        # If the action is cancelled
         except asyncio.CancelledError:
-            # Print a message to the terminal
             print("***** TASK Follow CANCELLED")
-            # Send the message "nt" to the agent (no turn)
             await self.a_agent.send_message("action", "nt")
