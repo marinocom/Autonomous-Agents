@@ -150,6 +150,7 @@ class RandomRoam:
         self.turn_target = 0
         self.turn_direction = ""
         self.turn_command = ""
+        self.last_command_time = 0
     
     async def run(self):
         try:
@@ -158,8 +159,8 @@ class RandomRoam:
 
             while True:
                 current_time = asyncio.get_event_loop().time()
-
                 
+                        
                 if self.state == self.DECIDING:
                     # Probabilities for different actions
                     action_prob = random.random()
@@ -229,7 +230,7 @@ class Avoid:
         self.avoid_direction = ""
         self.avoid_start_rotation = 0
         self.safe_distance = 1.0
-        self.last_command_time = 0  # NEW: Track command timing
+        self.last_command_time = 0  # Track command timing
 
     async def run(self):
         try:
@@ -239,14 +240,14 @@ class Avoid:
             while True:
                 current_time = asyncio.get_event_loop().time()
                 
-                # Only proceed if enough time has passed since last command (NEW)
+                # Only proceed if enough time has passed since last command (avoids conflicts with unity)
                 if current_time - self.last_command_time < 0.1:  # Send commands every 0.1s
                     await asyncio.sleep(0.01)
                     continue
                     
                 self.last_command_time = current_time
                 
-                # Get sensor data (unchanged from original)
+                # Get sensor data
                 sensor_hits = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.HIT]
                 sensor_distances = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.DISTANCE]
                 sensor_angles = self.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
@@ -254,16 +255,16 @@ class Avoid:
                 if self.state == self.MOVING:
                     await self.a_agent.send_message("action", "mf")  # Continuous movement
                     
-                    # Improved obstacle detection (similar structure but more reliable)
+                    # Improved obstacle detection
                     obstacle_info = []
                     for i, (hit, dist) in enumerate(zip(sensor_hits, sensor_distances)):
-                        if hit and 0.1 < dist < self.safe_distance:  # Added minimum distance
+                        if hit and 0.1 < dist < self.safe_distance:
                             obstacle_info.append((sensor_angles[i], dist))
                     
                     if obstacle_info:  # If any obstacles found
                         await self.a_agent.send_message("action", "stop")
                         
-                        # Original turn decision logic (preserved)
+                        # turn decision logic
                         left_obstacles = [info for info in obstacle_info if info[0] < 0]
                         right_obstacles = [info for info in obstacle_info if info[0] > 0]
                         
@@ -282,10 +283,10 @@ class Avoid:
                         self.state = self.AVOIDING
                 
                 elif self.state == self.AVOIDING:
-                    # Continuous turning command (NEW)
+                    # Continuous turning command
                     await self.a_agent.send_message("action", "tl" if self.avoid_direction == "left" else "tr")
                     
-                    # Original rotation check (unchanged)
+                    # rotation check
                     current_rot = self.i_state.rotation["y"]
                     rot_diff = abs(current_rot - self.avoid_start_rotation)
                     rot_diff = min(rot_diff, 360 - rot_diff)
@@ -293,11 +294,11 @@ class Avoid:
                     if rot_diff >= 45:  # Minimum turn achieved
                         await self.a_agent.send_message("action", "nt")
                         
-                        # Original clearance check (unchanged)
+                        # clearance check
                         front_clear = not any(
                             hit and dist < self.safe_distance
                             for i, (hit, dist) in enumerate(zip(sensor_hits, sensor_distances))
-                            if abs(sensor_angles[i]) < 45  # Front cone only
+                            if abs(sensor_angles[i]) < 45
                         )
                         
                         if front_clear:
@@ -313,8 +314,6 @@ class Avoid:
             await self.a_agent.send_message("action", "nt")
             await self.a_agent.send_message("action", "stop")
             raise
-
-
 
 
 class FollowAstronaut:

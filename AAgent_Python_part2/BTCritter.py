@@ -44,7 +44,7 @@ class BN_DetectObstacle(pt.behaviour.Behaviour):
         #Set the goal to None
         self.my_goal = None
         #Print a message to the terminal
-        print("Initializing BN_DetectObstacle")
+        #print("Initializing BN_DetectObstacle")
         #Call the parent constructor
         super(BN_DetectObstacle, self).__init__("BN_DetectObstacle")
         #get the agent
@@ -73,7 +73,7 @@ class BN_DetectObstacle(pt.behaviour.Behaviour):
                 #If the object it hits is not an astronaut
                 if value["tag"] != "Astronaut" and sensor_distances[index] <    1.0:
                     # an obstacle is detected, print a message to the terminal
-                    print("BN_DetectObstacle completed with SUCCESS")
+                    #print("BN_DetectObstacle completed with SUCCESS")
                     #Return success
                     return pt.common.Status.SUCCESS
         #Return failure if no obstacle is detected
@@ -291,7 +291,7 @@ class BTCritter:
         det_avoid.add_children([BN_DetectObstacle(aagent), BN_Avoid(aagent)])
 
         #Create the detect follow sequence with the detect astronaut and follow astronaut behaviours
-        det_astro = pt.composites.Sequence(name="Detect_Follow", memory=True)
+        det_astro = pt.composites.Sequence(name="Detect_Follow", memory=False)
         #Add the detect astronaut and follow astronaut behaviours to the sequence as children
         det_astro.add_children([BN_DetectAstro(aagent), BN_FollowAstro(aagent)])
 

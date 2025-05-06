@@ -13,7 +13,7 @@
     "debug_mode": false,
     "manual_control": false,
     "initial_task": "bt:BTRoam",
-    "ray_perception_sensor_param": [5,90,0,1]
+    "ray_perception_sensor_param": [5,90,0,5]
   },
   "Misc": {
     "python_gui_monitor": false
