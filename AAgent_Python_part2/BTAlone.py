@@ -2,6 +2,7 @@ import asyncio
 import py_trees as pt
 from py_trees import common
 import Sensors
+import Goals_BT
 
 """
 Alejandra Reinares Guerreros (1665499)
@@ -10,55 +11,67 @@ Andreu Gascón Marzo (1670919)
 Pere Mayol Carbonell (1669503)
 """
 
-class BN_DetectFrozen(pt.behaviour.Behaviour):
+
+class BN_DetectCritter(pt.behaviour.Behaviour):
+    '''
+    Behavior node that detects the presence of an astronaut in the environment. It uses the agent's raycast sensor to scan for astronauts.
+    '''    
     def __init__(self, aagent):
         self.my_goal = None
-        super(BN_DetectFrozen, self).__init__("BN_DetectFrozen")
+        print("Initializing BN_DetectCritter")
+        super(BN_DetectCritter, self).__init__("BN_DetectCritter")
         self.my_agent = aagent
-        self.i_state = aagent.i_state
-        self.last_check_time = 0
-        self.check_interval = 2.0  # requency of checks
+        #Variable to store the sensor index
+        self.my_agent.det_sensor = None
 
     def initialise(self):
         pass
 
     def update(self):
-        # Limit check frequency
-        current_time = asyncio.get_event_loop().time()
-        if current_time - self.last_check_time < self.check_interval:
-            return self.status
-        
-        self.last_check_time = current_time
-        
-        if self.i_state.isFrozen:
-            return pt.common.Status.SUCCESS
+        '''
+        This checks if the raycast sensor detects an astronaut or not
+        '''
+        #Retrieve the object information from the raycast sensor rays
+        sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
+
+        for index, value in enumerate(sensor_obj_info):
+            if value:
+                if value["tag"] == "CritterMantaRay": #If the object hit is an astronaut
+                    print("BN_DetectCritter completed with SUCCESS")
+                    self.my_agent.det_sensor = index #Store the index of the sensor that detected the astronaut
+                    return pt.common.Status.SUCCESS
         return pt.common.Status.FAILURE
 
     def terminate(self, new_status: common.Status):
         pass
 
 
-class BN_DoNothing(pt.behaviour.Behaviour):
+class BN_AvoidCritter(pt.behaviour.Behaviour):
+    '''
+    Behavior node that makes the agent follow an astronaut detected in the environment. Spawns a FollowAstronaut goal as an asynchronous task.
+    '''
     def __init__(self, aagent):
-        self.my_agent = aagent
         self.my_goal = None
-        super(BN_DoNothing, self).__init__("BN_DoNothing")
+        print("Initializing BN_AvoidCritter")
+        super(BN_AvoidCritter, self).__init__("BN_AvoidCritter")
+        self.my_agent = aagent
 
     def initialise(self):
-        from Goals_BT import DoNothing
-        self.my_goal = asyncio.create_task(DoNothing(self.my_agent).run())
+        self.my_goal = asyncio.create_task(Goals_BT.AvoidCritter(self.my_agent).run())
 
     def update(self):
         if not self.my_goal.done():
             return pt.common.Status.RUNNING
         else:
             if self.my_goal.result():
+                print("BN_AvoidCritter completed with SUCCESS")
                 return pt.common.Status.SUCCESS
             else:
+                print("BN_AvoidCritter completed with FAILURE")
                 return pt.common.Status.FAILURE
 
     def terminate(self, new_status: common.Status):
-        # Finishing the behaviour, therefore we have to stop the associated task
+        self.logger.debug("Terminate BN_AvoidCritter")
         self.my_goal.cancel()
 
 
@@ -123,8 +136,7 @@ class BN_CollectFlower(pt.behaviour.Behaviour):
 
     def initialise(self):
         # Using the improved FlowerCollector class
-        import AloneGoals  # Replace with your actual module name
-        self.my_goal = asyncio.create_task(AloneGoals.FlowerCollector(self.my_agent).run())
+        self.my_goal = asyncio.create_task(Goals_BT.FlowerCollector(self.my_agent).run())
 
     def update(self):
         if not self.my_goal.done():
@@ -148,8 +160,7 @@ class BN_RandomWander(pt.behaviour.Behaviour):
 
     def initialise(self):
         # Using the improved RandomWander class
-        import AloneGoals  # Replace with your actual module name
-        self.my_goal = asyncio.create_task(AloneGoals.RandomWander(self.my_agent).run())
+        self.my_goal = asyncio.create_task(Goals_BT.RandomWander(self.my_agent).run())
         self.started = True
 
     def update(self):
@@ -214,8 +225,7 @@ class BN_ReturnToBase(pt.behaviour.Behaviour):
 
     def initialise(self):
         # Using the improved ReturnToBase class
-        import AloneGoals  # Replace with your actual module name
-        self.my_goal = asyncio.create_task(AloneGoals.ReturnToBase(self.my_agent, self.use_teleport).run())
+        self.my_goal = asyncio.create_task(Goals_BT.ReturnToBase(self.my_agent, self.use_teleport).run())
 
     def update(self):
         if not self.my_goal.done():
@@ -239,8 +249,7 @@ class BN_UnloadFlowers(pt.behaviour.Behaviour):
 
     def initialise(self):
         # Using the improved UnloadFlowers class
-        import AloneGoals  # Replace with your actual module name
-        self.my_goal = asyncio.create_task(AloneGoals.UnloadFlowers(self.my_agent).run())
+        self.my_goal = asyncio.create_task(Goals_BT.UnloadFlowers(self.my_agent).run())
 
     def update(self):
         if not self.my_goal.done():
@@ -261,18 +270,18 @@ class BTAlone:
         self.aagent = aagent
         print("Initializing BTAlone behavior tree")
 
-        # Define the behavior tree structure with improved memory settings
-        
-        # Handle frozen state - memory=True to remember state
-        frozen = pt.composites.Sequence(name="Sequence_frozen", memory=True)
-        frozen.add_children([BN_DetectFrozen(aagent), BN_DoNothing(aagent)])
+        # Define the behavior tree structure
+
+        #Avoid critters
+        avoid_critter = pt.composites.Sequence(name="Sequence_avoid_critters", memory=False)
+        avoid_critter.add_children([BN_DetectCritter(aagent), BN_AvoidCritter(aagent)])
         
         # Handle flower collection
-        collect_flower = pt.composites.Sequence(name="Sequence_collect_flower", memory=True)
+        collect_flower = pt.composites.Sequence(name="Sequence_collect_flower", memory=False)
         collect_flower.add_children([BN_DetectAlienFlower(aagent), BN_CollectFlower(aagent)])
         
         # Handle returning to base when inventory is full
-        return_to_base = pt.composites.Sequence(name="Sequence_return_to_base", memory=True)
+        return_to_base = pt.composites.Sequence(name="Sequence_return_to_base", memory=False)
         return_to_base.add_children([
             BN_CheckInventoryFull(aagent), 
             BN_ReturnToBase(aagent), 
@@ -281,17 +290,14 @@ class BTAlone:
         
         # Main behaviors - using Priority Selector with memory=True
         # This prevents rapid switching between behaviors
-        main_behaviors = pt.composites.Selector(name="Selector_main_behaviors", memory=True)
-        main_behaviors.add_children([
+        self.root = pt.composites.Selector(name="Selector_main_behaviors", memory=False)
+        self.root.add_children([
+            avoid_critter,
             return_to_base,  # First priority: return to base if inventory full
             collect_flower,  # Second priority: collect flower if one is detected
             BN_RandomWander(aagent)  # Third priority: wander randomly
         ])
-        
-        # Root selector with memory=False to allow switching between frozen and normal states
-        self.root = pt.composites.Selector(name="Selector_root", memory=False)
-        self.root.add_children([frozen, main_behaviors])
-        
+
         # Create the behavior tree
         self.behaviour_tree = pt.trees.BehaviourTree(self.root)
         

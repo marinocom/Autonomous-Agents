@@ -47,9 +47,6 @@ class BN_DetectObstacle(pt.behaviour.Behaviour):
         #Retrieve sensor information: detected objects, their distances, and angles
         sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
         sensor_distances = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.DISTANCE]
-        #------------------------------
-        #sensor_angles = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
-        #------------------------------
         
         #Iterate over detected objects from sensor data
         for index, obj in enumerate(sensor_obj_info):
@@ -113,7 +110,7 @@ class BN_DetectAstronaut(pt.behaviour.Behaviour):
         for index, value in enumerate(sensor_obj_info):
             if value:
                 if value["tag"] == "Astronaut": #If the object hit is an astronaut
-                    print("BN_DetectAstronaut completed with SUCCESS")
+                    #print("BN_DetectAstronaut completed with SUCCESS")
                     self.my_agent.det_sensor = index #Store the index of the sensor that detected the astronaut
                     return pt.common.Status.SUCCESS
         return pt.common.Status.FAILURE
@@ -128,7 +125,7 @@ class BN_FollowAstronaut(pt.behaviour.Behaviour):
     '''
     def __init__(self, aagent):
         self.my_goal = None
-        print("Initializing BN_FollowAstronaut")
+        #print("Initializing BN_FollowAstronaut")
         super(BN_FollowAstronaut, self).__init__("BN_FollowAstronaut")
         self.my_agent = aagent
 

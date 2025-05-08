@@ -6,7 +6,7 @@ import asyncio
 import json
 import Sensors
 import Goals_BT
-import BTRoam
+import BTAlone
 import BTCritter
 
 import tkinter as tk
@@ -162,12 +162,18 @@ class AAgent:
             "RandomRoam": Goals_BT.RandomRoam(self),
             "Avoid": Goals_BT.Avoid(self),
             "FollowAstronaut": Goals_BT.FollowAstronaut(self),
+            "FlowerCollector": Goals_BT.FlowerCollector(self),
+            "ReturnToBase": Goals_BT.ReturnToBase(self),
+            "UnloadFlowers": Goals_BT.UnloadFlowers(self),
+            "RandomWander": Goals_BT.RandomWander(self)
 
         }
 
         # Reference to the possible behaviour trees the agent can execute
         self.bts = {
-            "BTRoam": BTCritter.BTCritter(self)
+            "BTCritter": BTCritter.BTCritter(self),
+            "BTAlone": BTAlone.BTAlone(self)
+
         }
 
         # Active goal
