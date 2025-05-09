@@ -325,11 +325,11 @@ class BTAlone:
         # Define the behavior tree structure
                
         # Handle frozen state - memory=True to remember state
-        frozen = pt.composites.Sequence(name="Sequence_frozen", memory=True)
+        frozen = pt.composites.Sequence(name="Sequence_frozen", memory=False)
         frozen.add_children([BN_DetectFrozen(aagent), BN_DoNothing(aagent)])
         
 
-        scape = pt.composites.Sequence(name="Scape_Critters", memory=True)
+        scape = pt.composites.Sequence(name="Scape_Critters", memory=False)
         scape.add_children([BN_DetectCritter(aagent), BN_AvoidCritter(aagent)])
 
 
