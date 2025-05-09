@@ -7,27 +7,6 @@ import Goals_BT
 import Sensors
 
 
-class BN_DoNothing(pt.behaviour.Behaviour):
-    def __init__(self, aagent):
-        self.my_agent = aagent
-        self.my_goal = None
-        super(BN_DoNothing, self).__init__("BN_DoNothing")
-
-    def initialise(self):
-        self.my_goal = asyncio.create_task(Goals_BT.DoNothing(self.my_agent).run())
-
-    def update(self):
-        if not self.my_goal.done():
-            return pt.common.Status.RUNNING
-        else:
-            if self.my_goal.result():
-                return pt.common.Status.SUCCESS
-            else:
-                return pt.common.Status.FAILURE
-
-    def terminate(self, new_status: common.Status):
-        self.my_goal.cancel()
-
 class BN_DetectObstacle(pt.behaviour.Behaviour):
     '''
     Behavior node responsible for detecting obstacles in the environment. It uses the critter's raycast sensor to identify nearby objects (excluding astronauts).
@@ -168,7 +147,6 @@ class BN_RandomRoam(pt.behaviour.Behaviour):
                 return pt.common.Status.SUCCESS
             else:
                 self.logger.debug("BN_RandomRoam completed with FAILURE")
-
                 return pt.common.Status.FAILURE
 
     def terminate(self, new_status: common.Status):
@@ -181,13 +159,13 @@ class BN_RandomRoam(pt.behaviour.Behaviour):
 class BTCritter:
     def __init__(self, aagent):
 
-        #Create a sequence node for obstacle detection and avoidance
-        det_avoid = pt.composites.Sequence(name="Detect_Avoid", memory=True)
-        det_avoid.add_children([BN_DetectObstacle(aagent), BN_Avoid(aagent)]) #Add the detect obstacle and avoid behaviors as children of the sequence
-
         #Create a sequence node for astronaut detection and following behavior
         det_astro = pt.composites.Sequence(name="Detect_Follow", memory=False)
         det_astro.add_children([BN_DetectAstronaut(aagent), BN_FollowAstronaut(aagent)]) #Add astronaut detection and follow behaviors to the sequence
+
+        #Create a sequence node for obstacle detection and avoidance
+        det_avoid = pt.composites.Sequence(name="Detect_Avoid", memory=True)
+        det_avoid.add_children([BN_DetectObstacle(aagent), BN_Avoid(aagent)]) #Add the detect obstacle and avoid behaviors as children of the sequence
 
         #Create the root selector node that prioritizes behaviors based on order
         self.root = pt.composites.Selector(name="Selector", memory=False)

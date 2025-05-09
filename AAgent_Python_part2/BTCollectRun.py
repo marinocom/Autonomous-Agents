@@ -12,6 +12,69 @@ Pere Mayol Carbonell (1669503)
 """
 
 
+class BN_DetectCritter(pt.behaviour.Behaviour):
+    '''
+    Behavior node that detects the presence of an astronaut in the environment. It uses the agent's raycast sensor to scan for astronauts.
+    '''    
+    def __init__(self, aagent):
+        self.my_goal = None
+        print("Initializing BN_DetectCritter")
+        super(BN_DetectCritter, self).__init__("BN_DetectCritter")
+        self.my_agent = aagent
+        #Variable to store the sensor index
+        self.my_agent.det_sensor = None
+
+    def initialise(self):
+        pass
+
+    def update(self):
+        '''
+        This checks if the raycast sensor detects an astronaut or not
+        '''
+        #Retrieve the object information from the raycast sensor rays
+        sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
+
+        for index, value in enumerate(sensor_obj_info):
+            if value:
+                if value["tag"] == "CritterMantaRay": #If the object hit is an astronaut
+                    print("BN_DetectCritter completed with SUCCESS")
+                    self.my_agent.det_sensor = index #Store the index of the sensor that detected the astronaut
+                    return pt.common.Status.SUCCESS
+        return pt.common.Status.FAILURE
+
+    def terminate(self, new_status: common.Status):
+        pass
+
+
+class BN_AvoidCritter(pt.behaviour.Behaviour):
+    '''
+    Behavior node that makes the agent follow an astronaut detected in the environment. Spawns a FollowAstronaut goal as an asynchronous task.
+    '''
+    def __init__(self, aagent):
+        self.my_goal = None
+        print("Initializing BN_AvoidCritter")
+        super(BN_AvoidCritter, self).__init__("BN_AvoidCritter")
+        self.my_agent = aagent
+
+    def initialise(self):
+        self.my_goal = asyncio.create_task(Goals_BT.AvoidCritter(self.my_agent).run())
+
+    def update(self):
+        if not self.my_goal.done():
+            return pt.common.Status.RUNNING
+        else:
+            if self.my_goal.result():
+                print("BN_AvoidCritter completed with SUCCESS")
+                return pt.common.Status.SUCCESS
+            else:
+                print("BN_AvoidCritter completed with FAILURE")
+                return pt.common.Status.FAILURE
+
+    def terminate(self, new_status: common.Status):
+        self.logger.debug("Terminate BN_AvoidCritter")
+        self.my_goal.cancel()
+
+
 class BN_DetectAlienFlower(pt.behaviour.Behaviour):
     def __init__(self, aagent):
         super(BN_DetectAlienFlower, self).__init__("BN_DetectAlienFlower")
@@ -208,6 +271,10 @@ class BTAlone:
         print("Initializing BTAlone behavior tree")
 
         # Define the behavior tree structure
+
+        #Avoid critters
+        avoid_critter = pt.composites.Sequence(name="Sequence_avoid_critters", memory=False)
+        avoid_critter.add_children([BN_DetectCritter(aagent), BN_AvoidCritter(aagent)])
         
         # Handle flower collection
         collect_flower = pt.composites.Sequence(name="Sequence_collect_flower", memory=False)
@@ -225,6 +292,7 @@ class BTAlone:
         # This prevents rapid switching between behaviors
         self.root = pt.composites.Selector(name="Selector_main_behaviors", memory=False)
         self.root.add_children([
+            avoid_critter,
             return_to_base,  # First priority: return to base if inventory full
             collect_flower,  # Second priority: collect flower if one is detected
             BN_RandomWander(aagent)  # Third priority: wander randomly

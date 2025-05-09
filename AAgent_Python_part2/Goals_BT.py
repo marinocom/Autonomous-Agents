@@ -107,9 +107,6 @@ class AvoidCritter:
             await self.a_agent.send_message("action", "stop")
             await self.a_agent.send_message("action", "nt")
             return False
-#_________________________________________________________________________________________________________________________________
-
-
 
 
 class FlowerCollector:
@@ -646,7 +643,6 @@ class RandomRoam:
     DECIDING = 0
     MOVING = 1
     TURNING = 2
-    STOPPED = 3
     
     def __init__(self, a_agent):
         self.a_agent = a_agent
@@ -899,7 +895,3 @@ class FollowAstronaut:
         except asyncio.CancelledError:
             #print("***** TASK Follow CANCELLED")
             await self.a_agent.send_message("action", "nt")
-
-
-
-
