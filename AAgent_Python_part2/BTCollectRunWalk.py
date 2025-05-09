@@ -11,6 +11,57 @@ Andreu Gascón Marzo (1670919)
 Pere Mayol Carbonell (1669503)
 """
 
+class BN_DetectFrozen(pt.behaviour.Behaviour):
+    def __init__(self, aagent):
+        self.my_goal = None
+        super(BN_DetectFrozen, self).__init__("BN_DetectFrozen")
+        self.my_agent = aagent
+        self.i_state = aagent.i_state
+        self.last_check_time = 0
+        self.check_interval = 2.0  # requency of checks
+
+    def initialise(self):
+        pass
+
+    def update(self):
+        # Limit check frequency
+        current_time = asyncio.get_event_loop().time()
+        if current_time - self.last_check_time < self.check_interval:
+            return self.status
+        
+        self.last_check_time = current_time 
+        
+        if self.i_state.isFrozen:
+            return pt.common.Status.SUCCESS
+        return pt.common.Status.FAILURE
+
+    def terminate(self, new_status: common.Status):
+        pass
+
+
+class BN_DoNothing(pt.behaviour.Behaviour):
+    def __init__(self, aagent):
+        self.my_agent = aagent
+        self.my_goal = None
+        super(BN_DoNothing, self).__init__("BN_DoNothing")
+
+    def initialise(self):
+
+        self.my_goal = asyncio.create_task(Goals_BT.DoNothing(self.my_agent).run())
+
+    def update(self):
+        if not self.my_goal.done():
+            return pt.common.Status.RUNNING
+        else:
+            if self.my_goal.result():
+                return pt.common.Status.SUCCESS
+            else:
+                return pt.common.Status.FAILURE
+
+    def terminate(self, new_status: common.Status):
+        # Finishing the behaviour, therefore we have to stop the associated task
+        self.my_goal.cancel()
+
 
 class BN_DetectCritter(pt.behaviour.Behaviour):
     '''
@@ -18,7 +69,7 @@ class BN_DetectCritter(pt.behaviour.Behaviour):
     '''    
     def __init__(self, aagent):
         self.my_goal = None
-        print("Initializing BN_DetectCritter")
+        #print("Initializing BN_DetectCritter")
         super(BN_DetectCritter, self).__init__("BN_DetectCritter")
         self.my_agent = aagent
         #Variable to store the sensor index
@@ -37,7 +88,7 @@ class BN_DetectCritter(pt.behaviour.Behaviour):
         for index, value in enumerate(sensor_obj_info):
             if value:
                 if value["tag"] == "CritterMantaRay": #If the object hit is an astronaut
-                    print("BN_DetectCritter completed with SUCCESS")
+                    #print("BN_DetectCritter completed with SUCCESS")
                     self.my_agent.det_sensor = index #Store the index of the sensor that detected the astronaut
                     return pt.common.Status.SUCCESS
         return pt.common.Status.FAILURE
@@ -52,7 +103,7 @@ class BN_AvoidCritter(pt.behaviour.Behaviour):
     '''
     def __init__(self, aagent):
         self.my_goal = None
-        print("Initializing BN_AvoidCritter")
+        #print("Initializing BN_AvoidCritter")
         super(BN_AvoidCritter, self).__init__("BN_AvoidCritter")
         self.my_agent = aagent
 
@@ -64,10 +115,10 @@ class BN_AvoidCritter(pt.behaviour.Behaviour):
             return pt.common.Status.RUNNING
         else:
             if self.my_goal.result():
-                print("BN_AvoidCritter completed with SUCCESS")
+                #print("BN_AvoidCritter completed with SUCCESS")
                 return pt.common.Status.SUCCESS
             else:
-                print("BN_AvoidCritter completed with FAILURE")
+                #print("BN_AvoidCritter completed with FAILURE")
                 return pt.common.Status.FAILURE
 
     def terminate(self, new_status: common.Status):
@@ -117,7 +168,7 @@ class BN_DetectAlienFlower(pt.behaviour.Behaviour):
                 flower_detected = True
                 self.found_flower = True
                 self.last_detection_time = current_time
-                print(f"BN_DetectAlienFlower: Flower detected at sensor index {index}")
+                print(f"ASTRONAUT: Flower detected at sensor index {index}")
                 return pt.common.Status.SUCCESS
         
         # Only reset found_flower if we've checked and didn't find any
@@ -265,17 +316,23 @@ class BN_UnloadFlowers(pt.behaviour.Behaviour):
             self.my_goal.cancel()
 
 
+
 class BTAlone:
     def __init__(self, aagent):
         self.aagent = aagent
         print("Initializing BTAlone behavior tree")
 
         # Define the behavior tree structure
-
-        #Avoid critters
-        avoid_critter = pt.composites.Sequence(name="Sequence_avoid_critters", memory=False)
-        avoid_critter.add_children([BN_DetectCritter(aagent), BN_AvoidCritter(aagent)])
+               
+        # Handle frozen state - memory=True to remember state
+        frozen = pt.composites.Sequence(name="Sequence_frozen", memory=True)
+        frozen.add_children([BN_DetectFrozen(aagent), BN_DoNothing(aagent)])
         
+
+        scape = pt.composites.Sequence(name="Scape_Critters", memory=True)
+        scape.add_children([BN_DetectCritter(aagent), BN_AvoidCritter(aagent)])
+
+
         # Handle flower collection
         collect_flower = pt.composites.Sequence(name="Sequence_collect_flower", memory=False)
         collect_flower.add_children([BN_DetectAlienFlower(aagent), BN_CollectFlower(aagent)])
@@ -292,7 +349,8 @@ class BTAlone:
         # This prevents rapid switching between behaviors
         self.root = pt.composites.Selector(name="Selector_main_behaviors", memory=False)
         self.root.add_children([
-            avoid_critter,
+            frozen,  # First priority: handle frozen state
+            scape,  # Second priority: handle critter avoidance
             return_to_base,  # First priority: return to base if inventory full
             collect_flower,  # Second priority: collect flower if one is detected
             BN_RandomWander(aagent)  # Third priority: wander randomly

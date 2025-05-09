@@ -70,7 +70,7 @@ class BN_DetectAstronaut(pt.behaviour.Behaviour):
     '''    
     def __init__(self, aagent):
         self.my_goal = None
-        print("Initializing BN_DetectAstronaut")
+        print("CRITTER: Initializing BN_DetectAstronaut")
         super(BN_DetectAstronaut, self).__init__("BN_DetectAstronaut")
         self.my_agent = aagent
         #Variable to store the sensor index
@@ -116,10 +116,10 @@ class BN_FollowAstronaut(pt.behaviour.Behaviour):
             return pt.common.Status.RUNNING
         else:
             if self.my_goal.result():
-                print("BN_FollowAstronaut completed with SUCCESS")
+                #print("BN_FollowAstronaut completed with SUCCESS")
                 return pt.common.Status.SUCCESS
             else:
-                print("BN_FollowAstronaut completed with FAILURE")
+                #print("BN_FollowAstronaut completed with FAILURE")
                 return pt.common.Status.FAILURE
 
     def terminate(self, new_status: common.Status):
@@ -164,7 +164,7 @@ class BTCritter:
         det_astro.add_children([BN_DetectAstronaut(aagent), BN_FollowAstronaut(aagent)]) #Add astronaut detection and follow behaviors to the sequence
 
         #Create a sequence node for obstacle detection and avoidance
-        det_avoid = pt.composites.Sequence(name="Detect_Avoid", memory=True)
+        det_avoid = pt.composites.Sequence(name="Detect_Avoid", memory=False)
         det_avoid.add_children([BN_DetectObstacle(aagent), BN_Avoid(aagent)]) #Add the detect obstacle and avoid behaviors as children of the sequence
 
         #Create the root selector node that prioritizes behaviors based on order

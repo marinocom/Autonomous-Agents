@@ -10,7 +10,56 @@ Marino Oliveros Blanco (1668563)
 Andreu Gascón Marzo (1670919)
 Pere Mayol Carbonell (1669503)
 """
+class BN_DetectFrozen(pt.behaviour.Behaviour):
+    def __init__(self, aagent):
+        self.my_goal = None
+        super(BN_DetectFrozen, self).__init__("BN_DetectFrozen")
+        self.my_agent = aagent
+        self.i_state = aagent.i_state
+        self.last_check_time = 0
+        self.check_interval = 2.0  # requency of checks
 
+    def initialise(self):
+        pass
+
+    def update(self):
+        # Limit check frequency
+        current_time = asyncio.get_event_loop().time()
+        if current_time - self.last_check_time < self.check_interval:
+            return self.status
+        
+        self.last_check_time = current_time 
+        
+        if self.i_state.isFrozen:
+            return pt.common.Status.SUCCESS
+        return pt.common.Status.FAILURE
+
+    def terminate(self, new_status: common.Status):
+        pass
+
+
+class BN_DoNothing(pt.behaviour.Behaviour):
+    def __init__(self, aagent):
+        self.my_agent = aagent
+        self.my_goal = None
+        super(BN_DoNothing, self).__init__("BN_DoNothing")
+
+    def initialise(self):
+
+        self.my_goal = asyncio.create_task(Goals_BT.DoNothing(self.my_agent).run())
+
+    def update(self):
+        if not self.my_goal.done():
+            return pt.common.Status.RUNNING
+        else:
+            if self.my_goal.result():
+                return pt.common.Status.SUCCESS
+            else:
+                return pt.common.Status.FAILURE
+
+    def terminate(self, new_status: common.Status):
+        # Finishing the behaviour, therefore we have to stop the associated task
+        self.my_goal.cancel()
 
 class BN_DetectAlienFlower(pt.behaviour.Behaviour):
     def __init__(self, aagent):

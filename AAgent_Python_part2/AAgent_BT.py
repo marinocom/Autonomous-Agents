@@ -8,6 +8,9 @@ import Sensors
 import Goals_BT
 import BTAlone
 import BTCritter
+import BTCollectRun
+import BTAloneWalk
+import BTCollectRunWalk
 
 import tkinter as tk
 from threading import Thread
@@ -172,8 +175,10 @@ class AAgent:
         # Reference to the possible behaviour trees the agent can execute
         self.bts = {
             "BTCritter": BTCritter.BTCritter(self),
-            "BTAlone": BTAlone.BTAlone(self)
-
+            "BTAlone": BTAlone.BTAlone(self),
+            "BTCollectRun": BTCollectRun.BTAlone(self),
+            "BTAloneWalk": BTAloneWalk.BTAlone(self),
+            "BTCollectRunWalk": BTCollectRunWalk.BTAlone(self)
         }
 
         # Active goal

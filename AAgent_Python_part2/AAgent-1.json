@@ -8,11 +8,11 @@
     "name": "Astronaut",
     "interactable": true,
     "spawn_area": "",
-    "spawn_point": 4,
+    "spawn_point": 3,
     "spawn_distance": 2,
     "debug_mode": false,
     "manual_control": false,
-    "initial_task": "bt:BTAlone",
+    "initial_task": "bt:BTCollectRun",
     "ray_perception_sensor_param": [2,45,0.5,5]
   },
   "Misc": {
