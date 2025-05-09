@@ -280,9 +280,9 @@ class BTAlone:
         self.root = pt.composites.Selector(name="Selector_main_behaviors", memory=False)
         self.root.add_children([
             frozen,  # First priority: handle frozen state
-            return_to_base,  # First priority: return to base if inventory full
-            collect_flower,  # Second priority: collect flower if one is detected
-            BN_RandomWander(aagent)  # Third priority: wander randomly
+            return_to_base,  # Second priority: return to base if inventory full
+            collect_flower,  # Third priority: collect flower if one is detected
+            BN_RandomWander(aagent)
         ])
 
         # Create the behavior tree
